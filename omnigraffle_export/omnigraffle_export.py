@@ -2,10 +2,12 @@
 
 import hashlib
 import optparse
+import os
 import pathlib
 import subprocess
 import sys
 import tempfile
+import shutil
 
 from Foundation import NSURL, NSMutableDictionary
 from Quartz import PDFKit
@@ -53,11 +55,14 @@ def export(source, target, canvasname=None, format='pdf_tex', debug=False, force
         print("File: %s could not be opened for reading" % source, file=sys.stderr)
         sys.exit(1)
 
-    og = OmniGraffle()
-    schema = og.open(source)
-    canvasname = schema.get_canvas_list()[0]
 
     if format == "pdf_tex":
+        tmp_source = pathlib.Path(source).parent / "tmp_{}".format(str(pathlib.Path(source).name))
+        shutil.copyfile(source, tmp_source)
+
+        og = OmniGraffle()
+        schema = og.open(tmp_source)
+        canvasname = schema.get_canvas_list()[0]
 
         # First Export to PDF
         if export_all:
@@ -94,7 +99,16 @@ def export(source, target, canvasname=None, format='pdf_tex', debug=False, force
             except Exception as e:
                 pass
 
+        try:
+            os.remove(tmp_source)
+        except Exception as e:
+            pass
+
     else:
+        og = OmniGraffle()
+        schema = og.open(source)
+        canvasname = schema.get_canvas_list()[0]
+
         if export_all:
             namemap = lambda c, f: '%s.%s' % (c, f) if f else c
 
