@@ -10,7 +10,7 @@ import tempfile
 from Foundation import NSURL, NSMutableDictionary
 from Quartz import PDFKit
 
-from omnigraffle import *
+from omnigraffle_export.omnigraffle import *
 
 
 def export(source, target, canvasname=None, format='pdf_tex', debug=False, force=False):
