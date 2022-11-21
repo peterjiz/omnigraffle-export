@@ -1,0 +1,66 @@
+/*{
+    "author": "Peter El Jiz",
+    "targets": ["omnigraffle"],
+    "type": "action",
+    "identifier": "com.mycompany.StripText",
+    "version": "0.1",
+    "description": "A plug-in that...",
+    "label": "StripText",
+    "mediumLabel": "StripText",
+    "longLabel": "StripText",
+    "paletteLabel": "StripText",
+}*/
+
+function stripTextColor(obj, fillColor) {
+	if(typeof obj.fillColor  === 'undefined' || obj.fillColor  === null){
+		new_fillColor = fillColor
+	} else {
+		new_fillColor = obj.fillColor
+	}
+
+	if(typeof obj.graphics === 'undefined'){
+		//stop recursion
+		if(typeof obj.textColor === 'undefined' || obj.textColor === null){
+		} else {
+
+			if(typeof fillColor === 'undefined' || fillColor === null){
+			} else {
+				obj.text = obj.text
+				obj.textColor = new_fillColor
+			}
+		}
+
+	} else {
+		// continue recursion
+		lastElement = obj.graphics.at(-1)
+		lastElementFillColor = lastElement.fillColor
+		if(typeof lastElementFillColor === 'undefined' || lastElementFillColor === null){
+		} else {
+			new_fillColor = lastElementFillColor
+		}
+
+		for (graphic of obj.graphics) {
+			stripTextColor(graphic, new_fillColor)
+		}
+
+	}
+}
+
+(() => {
+	var action = new PlugIn.Action(function(selection) {
+		// Add code to run when the action is invoked
+		// console.log("Invoked with selection", selection);
+		for (canvas of canvases) {
+			stripTextColor(canvas, Color.RGB(1,1,1,1))
+		}
+	});
+
+	// If needed, uncomment, and add a function that returns true if the current selection is appropriate for the action.
+	/*
+    action.validate = function(selection){
+
+    };
+    */
+
+	return action;
+})();

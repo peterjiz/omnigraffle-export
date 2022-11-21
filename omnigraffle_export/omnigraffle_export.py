@@ -99,6 +99,7 @@ def export(source, target, canvasname=None, format='pdf_tex', debug=False, force
             except Exception as e:
                 pass
 
+        del schema
         try:
             os.remove(tmp_source)
         except Exception as e:
