@@ -2,6 +2,8 @@
 
 import hashlib
 import optparse
+import pathlib
+import subprocess
 import sys
 import tempfile
 
@@ -11,7 +13,7 @@ from Quartz import PDFKit
 from omnigraffle import *
 
 
-def export(source, target, canvasname=None, format='pdf', debug=False, force=False):
+def export(source, target, canvasname=None, format='pdf_tex', debug=False, force=False):
     # logging
     if debug:
         logging.basicConfig(level=logging.DEBUG)
@@ -32,8 +34,7 @@ def export(source, target, canvasname=None, format='pdf', debug=False, force=Fal
             canvasname = canvasname[:canvasname.rfind('.')]
 
         if not canvasname or len(canvasname) == 0:
-            print >> sys.stderr, "Without canvas name, the target (-t) " \
-                                 "must be a directory"
+            print("Without canvas name, the target (-t) " "must be a directory", file=sys.stderr)
             sys.exit(1)
 
     # determine the format
@@ -49,38 +50,83 @@ def export(source, target, canvasname=None, format='pdf', debug=False, force=Fal
 
     # check source
     if not os.access(source, os.R_OK):
-        print >> sys.stderr, "File: %s could not be opened for reading" % source
+        print("File: %s could not be opened for reading" % source, file=sys.stderr)
         sys.exit(1)
 
     og = OmniGraffle()
     schema = og.open(source)
+    canvasname = schema.get_canvas_list()[0]
 
-    if export_all:
-        namemap = lambda c, f: '%s.%s' % (c, f) if f else c
+    if format == "pdf_tex":
 
-        for c in schema.get_canvas_list():
-            canvas_file = c.replace(":", "")
-            canvas_file = canvas_file.replace("/", "")
+        # First Export to PDF
+        if export_all:
+            namemap = lambda c, f: '%s.%s' % (c, f) if f else c
 
-            targetfile = os.path.join(os.path.abspath(target),
-                                      namemap(canvas_file, format))
-            logging.debug("Exporting `%s' into `%s' as %s" %
-                          (c, targetfile, format))
-            export_one(schema, targetfile, c, format, force)
+            for c in schema.get_canvas_list():
+                canvas_file = c.replace(":", "")
+                canvas_file = canvas_file.replace("/", "")
+
+                tmp_target = str(pathlib.Path(target).parent / "pdf_tex_{}".format(namemap(canvas_file, format)))
+                logging.debug("Exporting `%s' into `%s' as %s" % (c, tmp_target, format))
+                export_one(schema, tmp_target, canvasname, "pdf", force)
+                # Then create pdf_tex(s) using inkscape
+                targetPDF_TEXFile = str(pathlib.Path(target).parent / "{}_tex.pdf".format(namemap(canvas_file, format)))
+                cmdString = "inkscape -D {} -o {} --export-latex".format(tmp_target, targetPDF_TEXFile)
+                subprocess.run(cmdString, shell=True, check=True, capture_output=True)
+                # Then export graphics only pdf(s)
+                export_one(schema, targetPDF_TEXFile, canvasname, "pdf", force, stripText=True)
+                try:
+                    os.remove(tmp_target)
+                except Exception as e:
+                    pass
+        else:
+            tmp_target = str(pathlib.Path(target).parent / "pdf_tex_{}.pdf".format(pathlib.Path(target).stem))
+            export_one(schema, tmp_target, canvasname, "pdf", force)
+            # Then create pdf_tex(s) using inkscape
+            targetPDF_TEXFile = str(pathlib.Path(target).parent / "{}_tex.pdf".format(str(pathlib.Path(target).stem)))
+            cmdString = "inkscape -D {} -o {} --export-latex".format(tmp_target, targetPDF_TEXFile)
+            subprocess.run(cmdString, shell=True, check=True, capture_output=True)
+            # Then export graphics only pdf(s)
+            export_one(schema, targetPDF_TEXFile, canvasname, "pdf", force, stripText=True)
+            try:
+                os.remove(tmp_target)
+            except Exception as e:
+                pass
+
     else:
-        export_one(schema, target, canvasname, format, force)
+        if export_all:
+            namemap = lambda c, f: '%s.%s' % (c, f) if f else c
+
+            for c in schema.get_canvas_list():
+                canvas_file = c.replace(":", "")
+                canvas_file = canvas_file.replace("/", "")
+
+                targetfile = os.path.join(os.path.abspath(target), namemap(canvas_file, format))
+                logging.debug("Exporting `%s' into `%s' as %s" % (c, targetfile, format))
+                export_one(schema, targetfile, c, format, force)
+        else:
+            export_one(schema, target, canvasname, format, force)
 
 
-def export_one(schema, filename, canvasname, format='pdf', force=False):
+def export_one(schema, filename, canvasname, format='pdf', force=False, stripText=False):
     def _checksum(filepath):
         assert os.path.isfile(filepath), '%s is not a file' % filepath
 
-        c = hashlib.md5()
-        with open(filepath, 'rb') as f:
-            for chunk in iter(lambda: f.read(128), ''):
-                c.update(chunk)
+        # set new_md5_shellout to do shell script "md5 " & quoted form of pdfPath
+        # set new_md5 to second item of my splitText(new_md5_shellout, ("= "))
+        md5Out = subprocess.run("md5 {}".format(filepath), shell=True, check=True, capture_output=True).stdout
+        md5OutStr = str(md5Out).split("= ", -1)[1].split("\\n")[0]
 
-        return c.hexdigest()
+
+        # c = hashlib.md5()
+        # with open(filepath, 'rb') as f:
+        #     for chunk in iter(lambda: f.read(128), ''):
+        #         c.update(chunk)
+        #
+        # return c.hexdigest()
+
+        return md5OutStr
 
     def _checksum_pdf(filepath):
         assert os.path.isfile(filepath), '%s is not a file' % filepath
@@ -117,14 +163,12 @@ def export_one(schema, filename, canvasname, format='pdf', force=False):
     # checksum
     chksum = None
     if os.path.isfile(filename) and not force:
-        existing_chksum = _checksum(filename) if format != 'pdf' \
-            else _checksum_pdf(filename)
+        existing_chksum = _checksum(filename) if format != 'pdf' else _checksum_pdf(filename)
 
         new_chksum = _compute_canvas_checksum(canvasname)
 
         if existing_chksum == new_chksum and existing_chksum != None:
-            logging.debug(
-                'Not exporting `%s` into `%s` as `%s` - canvas has not been changed' % (canvasname, filename, format))
+            logging.debug('Not exporting `%s` into `%s` as `%s` - canvas has not been changed' % (canvasname, filename, format))
             return False
         else:
             chksum = new_chksum
@@ -133,9 +177,9 @@ def export_one(schema, filename, canvasname, format='pdf', force=False):
         chksum = _compute_canvas_checksum(canvasname)
 
     try:
-        schema.export(canvasname, filename, format=format)
+        schema.export(canvasname, filename, format=format, stripText=stripText)
     except RuntimeError as e:
-        print >> sys.stderr, e.message
+        print(e, file=sys.stderr)
         return False
 
     # update checksum
@@ -145,8 +189,7 @@ def export_one(schema, filename, canvasname, format='pdf', force=False):
         pdfdoc = PDFKit.PDFDocument.alloc().initWithURL_(url)
         attrs = NSMutableDictionary.alloc().initWithDictionary_(pdfdoc.documentAttributes())
 
-        attrs[PDFKit.PDFDocumentSubjectAttribute] = \
-            '%s%s' % (OmniGraffleSchema.PDF_CHECKSUM_ATTRIBUTE, chksum)
+        attrs[PDFKit.PDFDocumentSubjectAttribute] = '%s%s' % (OmniGraffleSchema.PDF_CHECKSUM_ATTRIBUTE, chksum)
 
         pdfdoc.setDocumentAttributes_(attrs)
         pdfdoc.writeToFile_(filename)
@@ -158,19 +201,10 @@ def main():
     usage = "Usage: %prog [options] <source> <target>"
     parser = optparse.OptionParser(usage=usage)
 
-    parser.add_option('-c',
-                      help='canvas name. If not given it will be guessed from '
-                           'the target filename unless it is a directory.',
-                      metavar='NAME', dest='canvasname')
-    parser.add_option('-f',
-                      help='format (one of: pdf, png, svg, eps). Guessed '
-                           'from the target filename suffix unless it is a '
-                           'directory. Defaults to pdf',
-                      metavar='FMT', dest='format')
-    parser.add_option('--force', action='store_true', help='force the export',
-                      dest='force')
-    parser.add_option('--debug', action='store_true', help='debug',
-                      dest='debug')
+    parser.add_option('-c', help='canvas name. If not given it will be guessed from ' 'the target filename unless it is a directory.', metavar='NAME', dest='canvasname')
+    parser.add_option('-f', help='format (one of: pdf, png, svg, eps). Guessed ' 'from the target filename suffix unless it is a ' 'directory. Defaults to pdf', metavar='FMT', dest='format')
+    parser.add_option('--force', action='store_true', help='force the export', dest='force')
+    parser.add_option('--debug', action='store_true', help='debug', dest='debug')
 
     (options, args) = parser.parse_args()
 
@@ -180,8 +214,7 @@ def main():
 
     (source, target) = args
 
-    export(source, target, options.canvasname, options.format,
-           options.debug, options.force)
+    export(source, target, options.canvasname, options.format, options.debug, options.force)
 
 
 if __name__ == '__main__':

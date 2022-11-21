@@ -2,6 +2,7 @@ import logging
 import os
 import time
 
+import osascript as osascript
 from appscript import *
 
 class OmniGraffleSchema(object):
@@ -12,6 +13,7 @@ class OmniGraffleSchema(object):
         "eps": "EPS",
         "pdf": "PDF",
         "png": "PNG",
+        "pdf_tex": "PDF",
 
         # FIXME
         # "svg": "SVG",
@@ -32,7 +34,7 @@ class OmniGraffleSchema(object):
         self.path = doc.path()
 
     def has_export_function(self):
-        return tuple(map(int, self.og.version().split('.'))[:2]) >= (7, 8)
+        return tuple(list(map(int, self.og.version().split('.')))[:2]) >= (7, 8)
 
     def sandboxed(self):
         # real check using '/usr/bin/codesign --display --entitlements - /Applications/OmniGraffle.app'
@@ -54,7 +56,7 @@ class OmniGraffleSchema(object):
 
         return [c.name() for c in self.doc.canvases()]
 
-    def export(self, canvasname, fname, format='pdf'):
+    def export(self, canvasname, fname, format='pdf', stripText=False):
         """
         Exports one canvas named `canvasname into `fname` using `format` format.
         """
@@ -74,13 +76,17 @@ class OmniGraffleSchema(object):
             export_path = self.get_sandbox_path() + os.path.basename(fname)
             logging.debug('OmniGraffle is sandboxed - exporting to: %s' % export_path)
 
+        # StripText?
+        if stripText == True:
+            self.og.activate()
+            osascript.osascript(" ".join(["tell application \"System Events\"", "\nclick menu item \"StripText\" of menu 1 of menu bar item \"Automation\" of menu bar 1 of application process \"OmniGraffle\"", "\nend tell"]))
+
          # find canvas
         canvas = [c for c in self.doc.canvases() if c.name() == canvasname]
         if len(canvas) == 1:
             canvas = canvas[0]
         else:
-            raise RuntimeError('Canvas %s does not exist in %s' %
-                         (canvasname, self.doc.path()))
+            raise RuntimeError('Canvas %s does not exist in %s' % (canvasname, self.doc.path()))
 
         # export
         self.og.windows.first().canvas.set(canvas)
