@@ -104,6 +104,11 @@ def export(source, target, canvasname=None, format='pdf_tex', debug=False, force
         except Exception as e:
             pass
 
+        try:
+            os.rmdir(tmp_source)
+        except Exception as e:
+            pass
+
     else:
         og = OmniGraffle()
         schema = og.open(source)
