@@ -63,13 +63,22 @@ Examples
     $ omnigraffle-export -c FullModel schemas.graffle my_new_model.pdf
     ```
     
-    *Note: that the ’.pdf’ suffix will be automatically added in the first case.*
+-   Export canvas name *FullModel* into a *my\_new\_model.pdf* PDF_Tex file:
+
+    ```sh
+    $ omnigraffle-export -c FullModel schemas.graffle my_new_model.pdf_tex
+    ```
 
 -   Export *all* canvases into directory *figures* using EPS
     
     ```
     $ omnigraffle-export -f eps schemas.graffle figures
     ```
+
+PDF_Tex Support Example 
+--------------------- 
+
+This implementation separates the text from the figure and creates a pdf_tex file and a graphics pdf file.
 
 LaTeX Support Example
 ---------------------
