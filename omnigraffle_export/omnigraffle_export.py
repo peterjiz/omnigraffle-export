@@ -12,8 +12,8 @@ import shutil
 from Foundation import NSURL, NSMutableDictionary
 from Quartz import PDFKit
 
-# from omnigraffle_export.omnigraffle import *
-from omnigraffle import *
+from omnigraffle_export.omnigraffle import *
+# from omnigraffle import *
 
 import re, shutil, tempfile
 
