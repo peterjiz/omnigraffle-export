@@ -12,8 +12,33 @@ import shutil
 from Foundation import NSURL, NSMutableDictionary
 from Quartz import PDFKit
 
-from omnigraffle_export.omnigraffle import *
+# from omnigraffle_export.omnigraffle import *
+from omnigraffle import *
 
+import re, shutil, tempfile
+
+# https://stackoverflow.com/questions/4427542/how-to-do-sed-like-text-replace-with-python
+def sed_inplace(filename, pattern, repl):
+    '''
+    Perform the pure-Python equivalent of in-place `sed` substitution: e.g.,
+    `sed -i -e 's/'${pattern}'/'${repl}' "${filename}"`.
+    '''
+    # For efficiency, precompile the passed regular expression.
+    pattern_compiled = re.compile(pattern)
+
+    # For portability, NamedTemporaryFile() defaults to mode "w+b" (i.e., binary
+    # writing with updating). This is usually a good thing. In this case,
+    # however, binary writing imposes non-trivial encoding constraints trivially
+    # resolved by switching to text writing. Let's do that.
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp_file:
+        with open(filename) as src_file:
+            for line in src_file:
+                tmp_file.write(pattern_compiled.sub(repl, line))
+
+    # Overwrite the original file with the munged temporary file in a
+    # manner preserving file attributes (e.g., permissions).
+    shutil.copystat(filename, tmp_file.name)
+    shutil.move(tmp_file.name, filename)
 
 def export(source, target, canvasname=None, format='pdf_tex', debug=False, force=False):
     # logging
@@ -79,6 +104,10 @@ def export(source, target, canvasname=None, format='pdf_tex', debug=False, force
                 targetPDF_TEXFile = str(pathlib.Path(target).parent / "{}_tex.pdf".format(namemap(canvas_file, format)))
                 cmdString = "inkscape -D {} -o {} --export-latex".format(tmp_target, targetPDF_TEXFile)
                 subprocess.run(cmdString, shell=True, check=True, capture_output=True)
+
+                pattern = r"\\put\(0,0\)\{\\includegraphics\[width\=\\unitlength,page\=\b(?![01]\b)\d{1,4}\b\]\{" + targetPDF_TEXFile + "\}\}" + "%"
+                sed_inplace("{}_tex".format(targetPDF_TEXFile), pattern, "")
+
                 # Then export graphics only pdf(s)
                 export_one(schema, targetPDF_TEXFile, canvasname, "pdf", force, stripText=True)
                 try:
@@ -87,11 +116,15 @@ def export(source, target, canvasname=None, format='pdf_tex', debug=False, force
                     pass
         else:
             tmp_target = str(pathlib.Path(target).parent / "pdf_tex_{}.pdf".format(pathlib.Path(target).stem))
+            targetPDF_TEXFile = str(pathlib.Path(target).parent / "{}_tex.pdf".format(str(pathlib.Path(target).stem)))
+            targetPDF_TEXFile_filename = str(pathlib.Path(targetPDF_TEXFile).name)
             export_one(schema, tmp_target, canvasname, "pdf", force)
             # Then create pdf_tex(s) using inkscape
-            targetPDF_TEXFile = str(pathlib.Path(target).parent / "{}_tex.pdf".format(str(pathlib.Path(target).stem)))
             cmdString = "inkscape -D {} -o {} --export-latex".format(tmp_target, targetPDF_TEXFile)
             subprocess.run(cmdString, shell=True, check=True, capture_output=True)
+
+            pattern = r"\\put\(0,0\)\{\\includegraphics\[width\=\\unitlength,page\=\b(?![01]\b)\d{1,4}\b\]\{" + targetPDF_TEXFile_filename + "\}\}" + "%"
+            sed_inplace("{}_tex".format(targetPDF_TEXFile), pattern, "")
             # Then export graphics only pdf(s)
             export_one(schema, targetPDF_TEXFile, canvasname, "pdf", force, stripText=True)
             try:
