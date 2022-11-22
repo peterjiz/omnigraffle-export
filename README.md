@@ -78,7 +78,8 @@ Examples
 PDF_Tex Support Example 
 --------------------- 
 
-This implementation separates the text from the figure and creates a pdf_tex file and a graphics pdf file.
+This implementation separates the text from the figure and creates a pdf_tex file and a graphics pdf file. 
+Requires Inkscape and my StripText.omnijs plugin.
 
 LaTeX Support Example
 ---------------------
